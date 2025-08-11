@@ -1,0 +1,88 @@
+:root{
+  --bg:#0b0f16; --bg-soft:#121826; --card:#0f1624; --border:#1f2a3a;
+  --text:#e6edf7; --muted:#9fb0c6; --accent:#6ae1ff; --accent-2:#8a7dff;
+  --good:#2ce39b; --good-strong:#16b978;
+  --bad:#ff6e6e; --bad-strong:#e14c4c;
+  --warn:#f6c74f;
+  --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px;
+  --font-sans:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
+  --font-head:"Space Grotesk",var(--font-sans);
+  --font-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,"Liberation Mono","Courier New",monospace;
+}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;background:
+  radial-gradient(1200px 700px at 20% -10%, rgba(106,225,255,.12), transparent 60%),
+  radial-gradient(1000px 600px at 110% 10%, rgba(138,125,255,.10), transparent 55%), var(--bg);
+  color:var(--text);font-family:var(--font-sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.container{max-width:1360px;margin:0 auto;padding:1rem}
+header{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin:.5rem 0 1.25rem}
+.title{font-family:var(--font-head);font-size:1.6rem;font-weight:700;letter-spacing:.2px}
+nav{display:flex;gap:.6rem;flex-wrap:wrap}
+nav a{text-decoration:none;color:var(--text);padding:.6rem .9rem;border:1px solid var(--border);border-radius:999px;background:linear-gradient(180deg,var(--bg-soft),rgba(255,255,255,.02));box-shadow:var(--shadow)}
+nav a.active{outline:2px solid rgba(106,225,255,.6)}
+.right{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.ghost{background:linear-gradient(180deg,var(--bg-soft),rgba(255,255,255,.02));color:var(--text);border:1px solid var(--border);padding:.6rem .9rem;border-radius:999px;cursor:pointer;box-shadow:var(--shadow)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem;box-shadow:var(--shadow)}
+table{width:100%;border-collapse:separate;border-spacing:0 10px;font-family:var(--font-mono);font-size:15px;font-variant-numeric:tabular-nums}
+thead th{position:sticky;top:0;background:var(--card);color:var(--muted);text-align:left;padding:.6rem .8rem;font-weight:700;z-index:5;box-shadow:0 8px 16px rgba(0,0,0,.35)}
+tbody tr{background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+tbody td{padding:.75rem .6rem;vertical-align:middle}
+tbody tr:hover{outline:1px solid rgba(106,225,255,.3)}
+tfoot td{padding:.9rem .6rem}
+.rightnum{text-align:right}
+.good{color:var(--good)} .bad{color:var(--bad)}
+.row{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}.row>*{flex:1}
+.logo{width:26px;height:26px;border-radius:50%;vertical-align:middle;margin-right:.5rem;border:1px solid var(--border);background:#fff}
+.muted{color:var(--muted);font-size:.95rem}
+input,select{background:#0b1220;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:.5rem .6rem;font-family:var(--font-mono);font-size:15px}
+input::placeholder{color:var(--muted)}
+.xbtn{background:transparent;border:1px solid var(--border);border-radius:10px;padding:.35rem .6rem;cursor:pointer;color:var(--muted)}
+.xbtn:hover{color:var(--text);border-color:rgba(138,125,255,.6)}
+tfoot tr{position:sticky;bottom:0;background:linear-gradient(180deg,var(--bg-soft),var(--bg))}
+.section{display:none}.section.active{display:block}
+
+/* Pills */
+.sig{width:34px}
+.pill{display:inline-block;width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.05) inset;transition:transform .15s ease}
+.pill-good{background:var(--good)}
+.pill-bad{background:var(--bad)}
+.pill-neutral{background:var(--warn)}
+@keyframes flashPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.8)}100%{box-shadow:0 0 0 10px rgba(255,255,255,0)}}
+.flash{animation:flashPulse .6s ease-out both}
+
+/* Verdict card bg by rating */
+.verdict{border-radius:12px;padding:.9rem;border:1px solid var(--border);background:var(--bg-soft)}
+.verdict.strongbuy{background:rgba(22,185,120,.14);border-color:rgba(22,185,120,.45)}
+.verdict.buy{background:rgba(44,227,155,.10);border-color:rgba(44,227,155,.35)}
+.verdict.sell{background:rgba(255,110,110,.10);border-color:rgba(255,110,110,.35)}
+.verdict.strongsell{background:rgba(225,76,76,.14);border-color:rgba(225,76,76,.45)}
+.verdict.neutral{background:rgba(246,199,79,.12);border-color:rgba(246,199,79,.35)}
+
+/* Mini scan cards */
+.mini{background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:.75rem;display:flex;flex-direction:column;gap:.35rem}
+.mini .hdr{display:flex;align-items:center;justify-content:space-between;font-family:var(--font-head);font-weight:700}
+.badge{padding:.15rem .5rem;border-radius:999px;border:1px solid var(--border);font-size:.85rem}
+.badge.buy{background:rgba(44,227,155,.08);color:var(--good)}
+.badge.strongbuy{background:rgba(22,185,120,.12);color:var(--good-strong)}
+.badge.sell{background:rgba(255,110,110,.08);color:var(--bad)}
+.badge.strongsell{background:rgba(225,76,76,.12);color:var(--bad-strong)}
+.badge.neutral{background:rgba(246,199,79,.12);color:var(--warn)}
+.pillrow{display:flex;gap:.4rem;align-items:center}
+
+.chip{border:1px solid var(--border);padding:.3rem .55rem;border-radius:999px;cursor:pointer;background:linear-gradient(180deg,var(--bg-soft),rgba(255,255,255,.02));}
+.chip:hover{outline:1px solid rgba(106,225,255,.3)}
+.hint{font-size:.92rem;color:var(--muted)}
+.help{display:none;margin-top:.6rem;border:1px dashed var(--border);border-radius:12px;padding:.75rem;background:rgba(255,255,255,.03)}
+.help.show{display:block}
+
+/* Sparkline */
+.sparkwrap{display:flex;align-items:center;justify-content:space-between;margin:.25rem 0 .5rem}
+.sparkwrap canvas{width:180px;height:36px;border-radius:6px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+
+@media (max-width:760px){
+  thead{display:none} table{border-spacing:0 14px}
+  tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;padding:.6rem}
+  tbody td{display:flex;justify-content:space-between;align-items:center;padding:.2rem .4rem}
+  tbody td::before{content:attr(data-label);color:var(--muted);font-family:var(--font-sans);margin-right:.75rem}
+  .rightnum{text-align:right}.logo{width:22px;height:22px} input{width:100%}
+}
