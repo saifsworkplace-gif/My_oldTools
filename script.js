@@ -69,6 +69,21 @@ function calcADX(h,l,c,period=14){
   let adx; if(dx.length<period) adx=NaN; else { adx=dx.slice(0,period).reduce((x,y)=>x+y,0)/period; for(let i=period;i<dx.length;i++) adx=(adx*(period-1)+dx[i])/period; }
   return {adx,pdi,mdi};
 }
+function calcATR(highs, lows, closes, period=14){
+  const n = Math.min(highs.length, lows.length, closes.length);
+  if(n < period+1) return NaN;
+  const tr=[];
+  for(let i=1;i<n;i++){
+    const h=highs[i], l=lows[i], pc=closes[i-1];
+    tr.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+  }
+  // Wilder’s smoothing
+  let atr = tr.slice(0,period).reduce((a,b)=>a+b,0)/period;
+  for(let i=period;i<tr.length;i++){
+    atr = (atr*(period-1) + tr[i]) / period;
+  }
+  return atr;
+}
 
 /* ========= Rule parameters ========= */
 const RULES = {
@@ -374,7 +389,27 @@ async function runTechnicals(){
     const ema20=emaLast(closes,20), ema50=emaLast(closes,50), ema200=emaLast(closes,200);
     const {adx,pdi,mdi}=calcADX(highs,lows,closes,14);
 
+    // Late-entry analysis (returns { level, parts, metrics })
+    const le = checkLateEntry({ closes, highs, lows, price, ema20, ema50, rsi });
+
     const verdict = computeVerdictAndReasons({price,closes,ema20,ema50,ema200,rsi,macd,signal,hist,adx,pdi,mdi,quoteVol,highs,lows});
+
+    // === Apply Late-Entry Caution effects to verdict/confidence ===
+    if (le && le.level) {
+      const downgradeOne = r =>
+        (r==='Strong Buy') ? 'Buy' :
+        (r==='Buy')       ? 'Neutral' :
+        (r==='Neutral')   ? 'Sell' :
+        (r==='Sell')      ? 'Strong Sell' : r;
+
+      if (le.level === 'HIGH') {
+        verdict.rating = 'Cautious — wait for pullback';
+        verdict.confidence = Math.min(verdict.confidence ?? 0, 60);
+      } else if (le.level === 'MEDIUM') {
+        verdict.rating = downgradeOne(verdict.rating);
+        verdict.confidence = Math.min(verdict.confidence ?? 0, 75);
+      }
+    }
 
     const card=qs('#verdictCard'); card.className='card verdict';
     if (verdict.rating==='Strong Buy') card.classList.add('strongbuy');
@@ -491,3 +526,70 @@ qs('#techAuto').addEventListener('change',scheduleTechAuto); scheduleTechAuto();
 qs('#runTech').addEventListener('click',runTechnicals);
 qs('#scanPortfolio').addEventListener('click',scanPortfolio);
 qs('#toggleHelp').addEventListener('click',()=>qs('#helpPanel').classList.toggle('show'));
+
+// === Late-Entry Caution (detailed) ===
+// Rules: HIGH if any 2 buckets true; MEDIUM if exactly 1; else LOW.
+// Buckets: (1) RSI stretch, (2) Overextension vs EMA/ATR, (3) MACD cooling, (4) R:R to S/R
+function checkLateEntry({ closes, highs, lows, price, ema20, ema50, rsi }) {
+  const el = document.getElementById('lateEntryMessage');
+  if (!el) return;
+
+  const fmt = v => (isFinite(v) ? Number(v).toFixed(2) : '—');
+
+  // --- RSI rising 3 bars?
+  const rsiM1 = calcRSI(closes.slice(0, -1), 14);
+  const rsiM2 = calcRSI(closes.slice(0, -2), 14);
+  const rsiM3 = calcRSI(closes.slice(0, -3), 14);
+  const rising3 = [rsiM3, rsiM2, rsiM1, rsi].every(isFinite) && (rsiM2>rsiM3) && (rsiM1>rsiM2) && (rsi>rsiM1);
+
+  // --- MACD histogram shrinking 2 bars, and bearish cross ≤3?
+  const macd0 = calcMACD(closes, 12, 26, 9);
+  const macd1 = calcMACD(closes.slice(0, -1), 12, 26, 9);
+  const macd2 = calcMACD(closes.slice(0, -2), 12, 26, 9);
+  const histShrinking2 = [macd0.hist, macd1.hist, macd2.hist].every(isFinite) && (macd0.hist<macd1.hist) && (macd1.hist<macd2.hist);
+  const crossNow = [macd1.macd, macd1.signal, macd0.macd, macd0.signal].every(isFinite) && (macd1.macd>=macd1.signal) && (macd0.macd<macd0.signal);
+  const crossPrev1 = [macd2.macd, macd2.signal, macd1.macd, macd1.signal].every(isFinite) && (macd2.macd>=macd2.signal) && (macd1.macd<macd1.signal);
+  const bearishCross3 = crossNow || crossPrev1;
+
+  // --- Overextension vs EMA/ATR
+  const pctAbove50 = (isFinite(price)&&isFinite(ema50)&&ema50>0) ? ((price/ema50 - 1)*100) : NaN;
+  const atr14 = calcATR(highs, lows, closes, 14);
+  const above20xATR = (isFinite(price)&&isFinite(ema20)&&isFinite(atr14)) ? ((price-ema20) >= 2*atr14) : false;
+  const ext50 = isFinite(pctAbove50) && pctAbove50 >= 10;
+
+  // --- Nearest S/R (lookback 60)
+  const look = 60;
+  const recentRes = Math.max(...highs.slice(-look));
+  const recentSup = Math.min(...lows.slice(-look));
+  const distR = (isFinite(recentRes)&&isFinite(price)) ? ((recentRes-price)/price*100) : NaN;
+  const distS = (isFinite(recentSup)&&isFinite(price)) ? ((price-recentSup)/price*100) : NaN;
+
+  // --- 4 buckets
+  const cond1 = (isFinite(rsi) && rsi>=70) || (isFinite(rsi) && rsi>=65 && rising3);      // RSI stretch
+  const cond2 = !!(ext50 || above20xATR);                                               // Overextension
+  const cond3 = !!(histShrinking2 || bearishCross3);                                    // Cooling
+  const cond4 = (isFinite(distR)&&isFinite(distS) && distR<=2 && distS>=5);             // R:R bad
+
+  let count=0; if(cond1)count++; if(cond2)count++; if(cond3)count++; if(cond4)count++;
+  let level='LOW'; if(count>=2) level='HIGH'; else if(count===1) level='MEDIUM';
+
+  // message
+  const parts=[];
+  if(cond1) parts.push(`RSI ${fmt(rsi)}${(rsi>=65 && rising3)?' (rising 3)':''}`);
+  if(cond2) parts.push(`${isFinite(pctAbove50)?fmt(pctAbove50)+'% vs 50EMA':''}${above20xATR? (parts.length?', ':'')+'≥2×ATR over 20EMA':''}`);
+  if(cond3) parts.push(`MACD hist shrinking${bearishCross3?' & bearish cross≤3':''}`);
+  if(cond4) parts.push(`R ${fmt(distR)}% / S ${fmt(distS)}%`);
+
+  if(level==='HIGH'){
+    el.style.color = '#f6c74f';
+    el.textContent = `Late-entry risk: HIGH — ${parts.join('; ')}`;
+  }else if(level==='MEDIUM'){
+    el.style.color = '#f6c74f';
+    el.textContent = `Late-entry risk: MEDIUM — ${parts.join('; ') || 'one trigger'}`;
+  }else{
+    el.style.color = 'var(--good)';
+    el.textContent = 'Late-entry risk: LOW — no stretch/cooling signals';
+  }
+
+  return { level, parts, metrics:{ pctAbove50, distR, distS, atr14 } };
+}
