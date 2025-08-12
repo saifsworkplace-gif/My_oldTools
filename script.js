@@ -828,52 +828,106 @@ const lastMatch = /Last:\s*([0-9.]+)/i.exec(stats);
 
   // parse tech table
   // we expect <tbody id="techTable"><tr>...<td>Metric</td><td class="rightnum">Value</td><td>Note</td>
-  const rows = Array.from(document.querySelectorAll("#techTable tr"));
-  const pick = (metric) => {
-    const row = rows.find(r => (r.children?.[1]?.textContent || "").toLowerCase().includes(metric.toLowerCase()));
-    return row ? {
-      value: parseFloat((row.children?.[2]?.textContent || "").replace(/[^0-9.\-]/g,"")),
-      value: parseFloat((row.children?.[2]?.textContent || "").replace(/[^0-9.\-]/g, "")),
-    } : null;
-  };
+  // rows under the technicals table
+const rows = Array.from(document.querySelectorAll("#techTable tr"));
 
-  const rsiRow = pick("RSI");
-  const macdRow = pick("MACD");
-  const adxRow = pick("ADX");
-  const pdiRow = pick("+DI");
-  const mdiRow = pick("-DI");
-  const ema20Row = pick("EMA 20");
-  const ema50Row = pick("EMA 50");
-  const ema200Row = pick("EMA 200");
+// normalize label text so "EMA 20", "ema20", "EMA20 / EMA50" all match
+const norm = s => (s || "").toLowerCase().replace(/[^a-z0-9+\-\/()]/g, "");
 
-  // infer MACD direction from note if available
-  const macdRising = macdRow?.note ? /rising|increasing|bull/i.test(macdRow.note) : undefined;
+// pull all numbers from a text (as Numbers)
+const nums = t => (t.match(/[0-9.]+/g) || []).map(Number);
+
+// find a row by fuzzy label include
+const findRow = (needle) => {
+  const n = norm(needle);
+  return rows.find(r => norm(r.children?.[1]?.textContent).includes(n)) || null;
+};
+
+// simple cell helpers
+const cellText = (r, i) => (r?.children?.[i]?.textContent || "").trim();
+
+
+// --- pull individual indicators from the table ---
+const rsiRow  = findRow("rsi");
+const macdRow = findRow("macd");
+
+// EMA row is combined in your UI: "EMA20 / EMA50 / EMA200   13.73 / 13.13 / 13.72   1.20"
+const emaRow  = findRow("ema20/ema50/ema200");
+
+// +DI / -DI is combined
+const diRow   = findRow("+di/-di");
+
+// ADX(14) row
+const adxRow  = findRow("adx(14)");
+
+// parse values safely
+const rsi14   = rsiRow  ? nums(cellText(rsiRow, 2))[0]  : undefined;
+
+// MACD: we’ll infer “rising” from the note if present, and read numbers if available
+let macd = undefined, signal = undefined, hist = undefined, macdRising = undefined;
+if (macdRow) {
+  const arr = nums(cellText(macdRow, 2));  // e.g. "0.27 / 0.18" or "0.01 / 0.01"
+  macd    = arr[0];
+  signal  = arr[1];
+  hist    = (macd !== undefined && signal !== undefined) ? (macd - signal) : undefined;
+  macdRising = /rising|bull/i.test(cellText(macdRow, 3));
+}
+
+// EMAs: first 3 numbers are 20/50/200, a 4th number (if present) is your align weight
+let ema20 = undefined, ema50 = undefined, ema200 = undefined, maAlign = undefined;
+if (emaRow) {
+  const arr = nums(cellText(emaRow, 2));
+  [ema20, ema50, ema200, maAlign] = [arr[0], arr[1], arr[2], arr[3]];
+}
+
+// DI pair
+let plusDI = undefined, minusDI = undefined;
+if (diRow) {
+  const arr = nums(cellText(diRow, 2));
+  [plusDI, minusDI] = [arr[0], arr[1]];
+}
+
+// ADX
+const adx14 = adxRow ? nums(cellText(adxRow, 2))[0] : undefined;
 
   const analysis = {
-    symbol, timeframe,
-    updatedAt: new Date().toISOString(),
-    price,
-    confidence: inferBaseConfidence(), // try to read from your existing summary; else 60
-    indicators: {
-      rsi14: rsiRow?.value,
-      macd: macdRow ? { macd: macdRow.value ?? 0, signal: 0, hist: 0, rising: macdRising ?? true } : undefined,
-      ema20: ema20Row?.value, ema50: ema50Row?.value, ema200: ema200Row?.value,
-      adx14: adxRow?.value, plusDI: pdiRow?.value, minusDI: mdiRow?.value,
-      volumeTrend: "steady"
-    },
-    multiTF: { d1: null, h4: null, w1: null }, // unknown unless you set these
-    // very light trade map defaults if you don't have your own yet:
-    entry: (price!=null) ? { low: price*0.98, high: price*1.01 } : { low: null, high: null },
-    targets: (price!=null) ? [price*1.05] : [],
-    stop: (price!=null) ? price*0.96 : null,
-    resistance: [], support: []
-  };
+  symbol, timeframe,
+  updatedAt: new Date().toISOString(),
+  price,
+  confidence: inferBaseConfidence() ?? 60,  // default if we can’t find it
+  indicators: {
+    rsi14,
+    macd: macd !== undefined ? { macd, signal, hist, rising: macdRising ?? null } : undefined,
+    ema20, ema50, ema200, maAlign,
+    adx14, plusDI, minusDI,
+    volumeTrend: "steady"
+  },
+  // multi-timeframe placeholders (until you wire 4h/1w fetch)
+  multiTF: { d1: null, h4: null, w1: null },
+
+  // Trade map defaults (safe, based on current price if we have it)
+  entry:  (price != null) ? { low: price * 0.98, high: price * 1.01 } : { low: null, high: null },
+  targets:(price != null) ? [price * 1.05] : [],
+  stop:   (price != null) ? price * 0.96 : null,
+  resistance: [], support: []
+};
+
 
   window.updateTradeDecisionPanel(analysis);
 
-  function inferBaseConfidence(){
-    // try to read something like "Confidence: 78%" from your existing summary/meta
-    const meta = (document.getElementById("techMeta")?.textContent || "") + " " + (document.getElementById("techSummary")?.textContent || "");
-    const m = meta.match(/Confidence[:\s]+(\d{1,3})/i);
-    return m ? parseInt(m[1]) : null;
-} }
+  function inferBaseConfidence() {
+  // search specific spots first
+  const parts = [
+    document.getElementById("techMeta")?.textContent || "",
+    document.getElementById("techSummary")?.textContent || "",
+    document.getElementById("verdictCard")?.textContent || ""
+  ].join(" ");
+
+  // fallback to page text if needed
+  const hay = (parts.trim() ? parts : document.body.textContent || "");
+
+  const m = hay.match(/confidence[:\s]+(\d{1,3})/i);
+  return m ? parseInt(m[1]) : null;
+}
+
+}
