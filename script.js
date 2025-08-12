@@ -593,3 +593,285 @@ function checkLateEntry({ closes, highs, lows, price, ema20, ema50, rsi }) {
 
   return { level, parts, metrics:{ pctAbove50, distR, distS, atr14 } };
 }
+async function getBinancePrice(symbol) {
+  try {
+    const res = await fetch(`/api/binance?endpoint=price&symbol=${symbol}`);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const data = await res.json();
+    console.log(`Price for ${symbol}:`, data.price);
+    return data.price;
+  } catch (err) {
+    console.error("Error fetching Binance price:", err);
+  }
+}
+
+// Example usage:
+getBinancePrice("BTCUSDT");
+/* ============================================================
+   Trade Decision Panel: glue logic for live, plain-English UI
+   Paste at the very bottom of script.js
+   ============================================================ */
+
+// --- small helpers ---
+const TDP = {
+  el(id){ return document.getElementById(id); },
+  text(id, v){ const e = this.el(id); if (e) e.textContent = v; },
+  fmt(n, d=2){ return (n==null || isNaN(n)) ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:d}); },
+  pct(n){ return (n==null || isNaN(n)) ? "—" : `${Math.round(n)}%`; },
+  clamp(n, lo=0, hi=100){ return Math.max(lo, Math.min(hi, n)); },
+  diffPct(a,b){ return (a==null||b==null||b===0) ? null : ((a-b)/b)*100; }
+};
+
+// --- main entrypoint (preferred): call this with your computed analysis ---
+/*
+analysis = {
+  symbol: "INJUSDT",
+  timeframe: "1d",
+  updatedAt: new Date().toISOString(),
+  price: 14.42,
+
+  // base confidence from your Step-1/Step-2 logic
+  confidence: 78,
+
+  indicators: {
+    rsi14: 58.4,
+    macd: { macd: 0.27, signal: 0.18, hist: 0.09, rising: true }, // rising = hist increasing
+    ema20: 14.1, ema50: 13.4, ema200: 11.2,
+    adx14: 23.6, plusDI: 26.2, minusDI: 20.7,
+    volume24h: 13200000, volumeTrend: "steady" // "rising" | "falling" | "steady"
+  },
+
+  // Multi-timeframe flags (true=bullish, false=bearish, null=unknown)
+  multiTF: { d1: true, h4: false, w1: true },
+
+  // Trade map
+  entry: { low: 14.3, high: 14.5 },
+  targets: [15.2, 16.0],
+  stop: 13.4,
+
+  // Optional nearby levels
+  resistance: [15.2, 16.0],
+  support: [13.4]
+};
+*/
+window.updateTradeDecisionPanel = function updateTradeDecisionPanel(d){
+  // safety: if panel not present, skip
+  if (!TDP.el("trade-decision")) return;
+
+  // header bits
+  TDP.text("tdp-title", `${d.symbol} — Technicals (${d.timeframe || "—"})`);
+  TDP.text("tdp-updated", `Updated: ${d.updatedAt ? new Date(d.updatedAt).toLocaleString() : "—"}`);
+
+  // compute adjusted readiness with clear reasons
+  const reasons = [];
+  let adjusted = Number(d.confidence ?? 0);
+
+  // proximity to nearest resistance
+  let nearResPct = null;
+  if (Array.isArray(d.resistance) && d.resistance.length && d.price){
+    nearResPct = d.resistance
+      .map(r => Math.abs(TDP.diffPct(r, d.price)))
+      .filter(v => v!=null)
+      .sort((a,b)=>a-b)[0];
+  }
+
+  const rsi = d.indicators?.rsi14;
+  const adx = d.indicators?.adx14;
+  const plusDI = d.indicators?.plusDI;
+  const minusDI = d.indicators?.minusDI;
+  const macd = d.indicators?.macd;
+
+  if (d.multiTF?.h4 === false){ adjusted -= 10; reasons.push("4H momentum weakening"); }
+  if (nearResPct != null && nearResPct < 3){ adjusted -= 10; reasons.push("resistance is close"); }
+  if (adx != null && adx < 20){ adjusted -= 10; reasons.push("trend strength is weak (ADX < 20)"); }
+  if (rsi != null && rsi > 65){ adjusted -= 5; reasons.push("RSI is elevated (risk of pullback)"); }
+  if (d.indicators?.volumeTrend === "rising"){ adjusted += 5; reasons.push("volume is improving"); }
+
+  adjusted = TDP.clamp(Math.round(adjusted), 0, 100);
+
+  // verdict tone
+  let verdict = { label: "NO TRADE", tone: "tdp--avoid" };
+  if (adjusted >= 75) verdict = { label: "BUY", tone: "tdp--buy" };
+  else if (adjusted >= 55) verdict = { label: "HOLD / WAIT", tone: "tdp--wait" };
+  else if (adjusted >= 35) verdict = { label: "AVOID FOR NOW", tone: "tdp--avoid" };
+
+  // set badge + container tone
+  const badge = TDP.el("tdp-verdict");
+  if (badge){ badge.textContent = verdict.label; }
+  const container = TDP.el("trade-decision");
+  if (container){
+    container.classList.remove("tdp--buy","tdp--wait","tdp--avoid");
+    container.classList.add(verdict.tone);
+  }
+
+  // base confidence + reasons
+  const readCard = TDP.el("tdp-readiness");
+  if (readCard){
+    readCard.querySelector("p").textContent = `Base confidence: ${TDP.pct(d.confidence)}`;
+    const ul = TDP.el("tdp-readiness-reasons");
+    if (ul){
+      ul.innerHTML = "";
+      reasons.forEach(r => {
+        const li = document.createElement("li");
+        li.textContent = `Adjustment: ${r}`;
+        ul.appendChild(li);
+      });
+    }
+  }
+
+  // multi-timeframe flags
+  TDP.text("tdp-alignment-flags",
+    `1D: ${flag(d.multiTF?.d1)}  •  4H: ${flag(d.multiTF?.h4)}  •  1W: ${flag(d.multiTF?.w1)}`
+  );
+  TDP.text("tdp-alignment-context", contextLine());
+
+  // RSI explanation
+  TDP.text("tdp-rsi-text", rsiExplain(rsi));
+
+  // MACD explanation
+  TDP.text("tdp-macd-text", macdExplain(macd));
+
+  // EMA structure
+  TDP.text("tdp-ema-text", emaExplain(d.indicators?.ema20, d.indicators?.ema50, d.indicators?.ema200));
+
+  // ADX/DI explanation
+  TDP.text("tdp-adx-text", adxExplain(adx, plusDI, minusDI));
+
+  // Trade map
+  TDP.text("tdp-price", `$${TDP.fmt(d.price)}`);
+  TDP.text("tdp-entry", (d.entry && d.entry.low!=null && d.entry.high!=null) ? `$${TDP.fmt(d.entry.low)} - $${TDP.fmt(d.entry.high)}` : "—");
+  const t1 = d.targets?.[0];
+  TDP.text("tdp-t1", t1!=null ? `$${TDP.fmt(t1)}` : "—");
+  TDP.text("tdp-stop", d.stop!=null ? `$${TDP.fmt(d.stop)}` : "—");
+  const rr = (t1!=null && d.stop!=null && d.price!=null) ? ((t1 - d.price) / Math.max(0.0000001,(d.price - d.stop))) : null;
+  TDP.text("tdp-rr", rr!=null && isFinite(rr) ? `R:R (to T1): ${rr.toFixed(2)}x` : "R:R (to T1): —");
+
+  // Risks
+  const risks = [];
+  if (rsi != null && rsi > 65) risks.push("RSI is high; momentum may be extended.");
+  if (nearResPct != null && nearResPct < 3) risks.push("Nearest resistance is very close; initial breakout attempts can fail.");
+  if (adx != null && adx < 20) risks.push("ADX is low; trend strength is weak.");
+  if (macd && macd.rising === false) risks.push("MACD momentum is flattening; short-term follow-through may be limited.");
+  const riskUL = TDP.el("tdp-risks-list");
+  if (riskUL){
+    riskUL.innerHTML = "";
+    risks.forEach(r => { const li = document.createElement("li"); li.textContent = r; riskUL.appendChild(li); });
+    if (risks.length === 0){ const li = document.createElement("li"); li.textContent = "No immediate red flags."; riskUL.appendChild(li); }
+  }
+
+  // Context Snapshot
+  const inZone = d.entry && d.price!=null && d.entry.low!=null && d.entry.high!=null && d.price >= d.entry.low && d.price <= d.entry.high;
+  const parts = [];
+  parts.push(d.multiTF?.d1 ? "Daily trend is supportive" : "Daily trend is mixed");
+  parts.push(d.multiTF?.w1 ? "weekly backdrop is constructive" : "weekly backdrop is mixed");
+  if (d.multiTF?.h4 === false) parts.push("but 4H momentum is soft");
+  if (nearResPct != null) parts.push(`nearest resistance ~${nearResPct.toFixed(1)}% away`);
+  parts.push(inZone ? "price is inside entry zone" : "price is outside entry zone");
+  TDP.text("tdp-context-text", parts.join(", ") + (d.stop!=null ? `. Consider a stop near $${TDP.fmt(d.stop)}.` : "."));
+
+  // --- local helpers for text blocks ---
+  function flag(v){ return v===true ? "OK" : v===false ? "X" : "—"; }
+  function contextLine(){ 
+    const s = [];
+    if (d.multiTF?.d1 === true) s.push("1D supportive"); else if (d.multiTF?.d1 === false) s.push("1D weak");
+    if (d.multiTF?.h4 === true) s.push("4H supportive"); else if (d.multiTF?.h4 === false) s.push("4H soft");
+    if (d.multiTF?.w1 === true) s.push("1W constructive"); else if (d.multiTF?.w1 === false) s.push("1W weak");
+    if (nearResPct != null) s.push(`resistance ~${nearResPct.toFixed(1)}%`);
+    return s.length ? s.join(" · ") : "—";
+  }
+  function rsiExplain(v){
+    if (v==null) return "RSI data missing.";
+    if (v < 40) return `RSI ${TDP.fmt(v)} - in a weaker zone; buyers not in control yet.`;
+    if (v < 55) return `RSI ${TDP.fmt(v)} - neutral to mildly bullish; momentum building, not stretched.`;
+    if (v <= 65) return `RSI ${TDP.fmt(v)} - comfortably bullish with room before overbought.`;
+    return `RSI ${TDP.fmt(v)} - elevated; risk of short-term pullback above 65.`;
+    }
+  function macdExplain(m){
+    if (!m) return "MACD data missing.";
+    const side = m.macd >= m.signal ? "positive" : "negative";
+    const trend = m.rising ? "rising" : "cooling";
+    return `MACD is ${side} and ${trend}; this reflects ${side==="positive"?"buying":"selling"} pressure ${m.rising?"improving":"fading"}.`;
+  }
+  function emaExplain(e20, e50, e200){
+    if (e20==null || e50==null || e200==null) return "EMA data missing.";
+    return (e20>e50 && e50>e200)
+      ? "EMA stack 20 > 50 > 200 confirms an established uptrend structure."
+      : "EMA stack is not aligned; trend structure is mixed, expect choppier moves.";
+  }
+  function adxExplain(a, p, m){
+    if (a==null || p==null || m==null) return "ADX/DI data missing.";
+    const lead = p > m ? "buyers" : "sellers";
+    const strength = a < 20 ? "weak" : a < 25 ? "borderline" : a < 30 ? "moderate" : "strong";
+    return `ADX ${TDP.fmt(a)} with +DI ${TDP.fmt(p)} vs -DI ${TDP.fmt(m)}: ${lead} in control; trend strength is ${strength}.`;
+  }
+};
+
+// --- optional: if your pipeline dispatches a DOM event with the analysis, we update automatically ---
+// somewhere in your code after computing analysis, you can do:
+//   document.dispatchEvent(new CustomEvent("tech:analysis", { detail: analysis }));
+document.addEventListener("tech:analysis", (e) => {
+  if (e?.detail) window.updateTradeDecisionPanel(e.detail);
+});
+
+// --- fallback: try to SCRAPE current Technicals UI to build a minimal analysis object ---
+function scrapeAndUpdateTDP(){
+  if (!document.getElementById("trade-decision")) return;
+
+  // symbol/timeframe
+  const symbol = (document.getElementById("techTicker")?.value || "").toUpperCase() || "—";
+  const timeframe = document.getElementById("techTf")?.value || "—";
+
+  // last price from header "Last: X · 24h High: ..."
+  const stats = document.getElementById("techStats")?.textContent || "";
+  const lastMatch = stats.match(/Last:\s*([\d.]+)/i);
+  const price = lastMatch ? Number(lastMatch[1]) : null;
+
+  // parse tech table
+  // we expect <tbody id="techTable"><tr>...<td>Metric</td><td class="rightnum">Value</td><td>Note</td>
+  const rows = Array.from(document.querySelectorAll("#techTable tr"));
+  const pick = (metric) => {
+    const row = rows.find(r => (r.children?.[1]?.textContent || "").toLowerCase().includes(metric.toLowerCase()));
+    return row ? {
+      value: parseFloat((row.children?.[2]?.textContent || "").replace(/[^\d.-]/g,"")),
+      note: (row.children?.[3]?.textContent || "").trim()
+    } : null;
+  };
+
+  const rsiRow = pick("RSI");
+  const macdRow = pick("MACD");
+  const adxRow = pick("ADX");
+  const pdiRow = pick("+DI");
+  const mdiRow = pick("-DI");
+  const ema20Row = pick("EMA 20");
+  const ema50Row = pick("EMA 50");
+  const ema200Row = pick("EMA 200");
+
+  // infer MACD direction from note if available
+  const macdRising = macdRow?.note ? /rising|increasing|bull/i.test(macdRow.note) : undefined;
+
+  const analysis = {
+    symbol, timeframe,
+    updatedAt: new Date().toISOString(),
+    price,
+    confidence: inferBaseConfidence(), // try to read from your existing summary; else 60
+    indicators: {
+      rsi14: rsiRow?.value,
+      macd: macdRow ? { macd: macdRow.value ?? 0, signal: 0, hist: 0, rising: macdRising ?? true } : undefined,
+      ema20: ema20Row?.value, ema50: ema50Row?.value, ema200: ema200Row?.value,
+      adx14: adxRow?.value, plusDI: pdiRow?.value, minusDI: mdiRow?.value,
+      volumeTrend: "steady"
+    },
+    multiTF: { d1: null, h4: null, w1: null }, // unknown unless you set these
+    // very light trade map defaults if you don't have your own yet:
+    entry: (price!=null) ? { low: price*0.98, high: price*1.01 } : { low: null, high: null },
+    targets: (price!=null) ? [price*1.05] : [],
+    stop: (price!=null) ? price*0.96 : null,
+    resistance: [], support: []
+  };
+
+  window.updateTradeDecisionPanel(analysis);
+
+  function inferBaseConfidence(){
+    // try to read something like "Confidence: 78%" from your existing summary/meta
+    const meta = (document.getElementById("techMeta")?.textContent || "") + " " + (document.getElementById("techSummary")?.textContent || "");
+    const m = meta.match(/Confidence[:\s]+(\d{1,

@@ -6,6 +6,28 @@
   <title>Crypto Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Trade Decision Panel (temporary inline styles so you don't have to touch style.css yet) -->
+  <style>
+    /* --- Trade Decision Panel (namespaced) --- */
+    .tdp{max-width:1100px;margin:24px auto;padding:20px;background:#0e1320;border:1px solid #1f2a44;border-radius:16px;box-shadow:0 0 0 1px rgba(255,255,255,.03) inset}
+    .tdp__header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .tdp__badge{padding:6px 10px;border-radius:999px;font-weight:600;background:rgba(59,130,246,.15);color:#93c5fd}
+    .tdp__updated{color:#94a3b8;font-size:12px;margin-top:6px}
+    .tdp__grid{display:grid;gap:12px;margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
+    @media (max-width:900px){.tdp__grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:600px){.tdp__grid{grid-template-columns:1fr}}
+    .tdp__card{background:#0b1020;border:1px solid #1e293b;border-radius:12px;padding:12px}
+    .tdp__card--wide{grid-column:span 2}
+    .tdp h3{margin:0 0 6px;font-size:14px;color:#e2e8f0}
+    .tdp p,.tdp li{color:#cbd5e1;font-size:13px;line-height:1.45;margin:0}
+    .tdp__muted{color:#94a3b8}
+    .tdp__list{padding-left:16px;margin:0}
+    .tdp__map{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    @media (max-width:600px){.tdp__map{grid-template-columns:repeat(2,1fr)}}
+    .tdp__label{font-size:12px;color:#94a3b8}
+    .tdp__value{font-weight:600;color:#e5e7eb}
+  </style>
 </head>
 <body>
 <div class="container">
@@ -139,10 +161,10 @@
           <div id="techCounts" class="muted" style="margin-top:.25rem;">—</div>
           <div id="techMeta" class="muted" style="margin-top:.25rem;font-size:.9rem;">—</div>
           <!-- Late Entry Caution (inline inside verdict card) -->
-<div style="margin-top:.5rem;">
-  <div style="font-weight:700;margin-bottom:.25rem;">Late Entry Caution</div>
-  <div id="lateEntryMessage" style="color:orange;font-size:.95rem;">Checking...</div>
-</div>
+          <div style="margin-top:.5rem;">
+            <div style="font-weight:700;margin-bottom:.25rem;">Late Entry Caution</div>
+            <div id="lateEntryMessage" style="color:orange;font-size:.95rem;">Checking...</div>
+          </div>
           <div class="sparkwrap">
             <div class="muted">24 bars close</div>
             <canvas id="sparkClose" width="180" height="36"></canvas>
@@ -165,6 +187,71 @@
           </div>
         </div>
       </div>
+
+      <!-- === Trade Decision Panel (our new clear-English, decision engine) === -->
+      <section id="trade-decision" class="tdp">
+        <header class="tdp__header">
+          <h2 id="tdp-title">Technicals — Loading…</h2>
+          <span id="tdp-verdict" class="tdp__badge">—</span>
+        </header>
+        <div id="tdp-updated" class="tdp__updated">Updated: —</div>
+
+        <div class="tdp__grid">
+          <article class="tdp__card" id="tdp-readiness">
+            <h3>Trade Readiness Score</h3>
+            <p>Base confidence: —</p>
+            <ul class="tdp__list" id="tdp-readiness-reasons"></ul>
+          </article>
+
+          <article class="tdp__card" id="tdp-alignment">
+            <h3>Multi-Timeframe Alignment</h3>
+            <p id="tdp-alignment-flags">1D: —  •  4H: —  •  1W: —</p>
+            <p id="tdp-alignment-context" class="tdp__muted">Context: —</p>
+          </article>
+
+          <article class="tdp__card" id="tdp-rsi">
+            <h3>RSI</h3>
+            <p id="tdp-rsi-text">—</p>
+          </article>
+
+          <article class="tdp__card" id="tdp-macd">
+            <h3>MACD</h3>
+            <p id="tdp-macd-text">—</p>
+          </article>
+
+          <article class="tdp__card" id="tdp-ema">
+            <h3>EMA Structure</h3>
+            <p id="tdp-ema-text">—</p>
+          </article>
+
+          <article class="tdp__card" id="tdp-adx">
+            <h3>ADX / DI</h3>
+            <p id="tdp-adx-text">—</p>
+          </article>
+
+          <article class="tdp__card tdp__card--wide" id="tdp-trade-map">
+            <h3>Trade Map</h3>
+            <div class="tdp__map">
+              <div><div class="tdp__label">Price</div><div id="tdp-price" class="tdp__value">—</div></div>
+              <div><div class="tdp__label">Entry Zone</div><div id="tdp-entry" class="tdp__value">—</div></div>
+              <div><div class="tdp__label">Target 1</div><div id="tdp-t1" class="tdp__value">—</div></div>
+              <div><div class="tdp__label">Stop</div><div id="tdp-stop" class="tdp__value">—</div></div>
+            </div>
+            <p id="tdp-rr" class="tdp__muted">R:R (to T1): —</p>
+          </article>
+
+          <article class="tdp__card" id="tdp-risks">
+            <h3>Risk Factors</h3>
+            <ul class="tdp__list" id="tdp-risks-list"></ul>
+          </article>
+
+          <article class="tdp__card tdp__card--wide" id="tdp-context">
+            <h3>Context Snapshot</h3>
+            <p id="tdp-context-text">—</p>
+          </article>
+        </div>
+      </section>
+      <!-- === /Trade Decision Panel === -->
 
       <div class="card" style="margin-top:1rem;">
         <div style="font-weight:700;margin-bottom:.25rem;">Reasoning (how we decided)</div>
@@ -212,6 +299,21 @@
     </div>
   </section>
 </div>
+
+<!-- Tiny sanity-check so you see the panel is wired; real logic will go in script.js next step -->
+<script>
+  (function () {
+    const badge = document.getElementById('tdp-verdict');
+    const title = document.getElementById('tdp-title');
+    const updated = document.getElementById('tdp-updated');
+    if (!badge || !title || !updated) return;
+    title.textContent = 'Technicals — Ready';
+    badge.textContent = 'Connected';
+    badge.style.background = 'rgba(16,185,129,.15)'; // green
+    badge.style.color = '#34d399';
+    updated.textContent = 'Updated: waiting for data...';
+  })();
+</script>
 
 <script src="script.js"></script>
 </body>

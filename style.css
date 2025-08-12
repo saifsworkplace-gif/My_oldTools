@@ -86,3 +86,40 @@ tfoot tr{position:sticky;bottom:0;background:linear-gradient(180deg,var(--bg-sof
   tbody td::before{content:attr(data-label);color:var(--muted);font-family:var(--font-sans);margin-right:.75rem}
   .rightnum{text-align:right}.logo{width:22px;height:22px} input{width:100%}
 }
+
+/* ====================================================================== */
+/* Trade Decision Panel (TDP) — appended styles, fully namespaced         */
+/* ====================================================================== */
+.tdp{
+  max-width:1100px;
+  margin:24px auto;
+  padding:20px;
+  background:#0e1320;
+  border:1px solid #1f2a44;
+  border-radius:16px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.03) inset;
+}
+.tdp__header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.tdp__badge{
+  padding:6px 10px;border-radius:999px;font-weight:600;
+  background:rgba(59,130,246,.15);color:#93c5fd;border:1px solid rgba(59,130,246,.25)
+}
+.tdp__updated{color:#94a3b8;font-size:12px;margin-top:6px}
+.tdp__grid{display:grid;gap:12px;margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:900px){.tdp__grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:600px){.tdp__grid{grid-template-columns:1fr}}
+.tdp__card{background:#0b1020;border:1px solid #1e293b;border-radius:12px;padding:12px}
+.tdp__card--wide{grid-column:span 2}
+.tdp h3{margin:0 0 6px;font-size:14px;color:#e2e8f0}
+.tdp p,.tdp li{color:#cbd5e1;font-size:13px;line-height:1.45;margin:0}
+.tdp__muted{color:#94a3b8}
+.tdp__list{padding-left:16px;margin:0}
+.tdp__map{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:600px){.tdp__map{grid-template-columns:repeat(2,1fr)}}
+.tdp__label{font-size:12px;color:#94a3b8}
+.tdp__value{font-weight:600;color:#e5e7eb}
+
+/* Helper tones if you want to toggle programmatically via JS later */
+.tdp--buy .tdp__badge{background:rgba(22,185,120,.15);color:#34d399;border-color:rgba(22,185,120,.35)}
+.tdp--wait .tdp__badge{background:rgba(246,199,79,.15);color:#facc15;border-color:rgba(246,199,79,.35)}
+.tdp--avoid .tdp__badge{background:rgba(255,110,110,.15);color:#fb7185;border-color:rgba(255,110,110,.35)}
