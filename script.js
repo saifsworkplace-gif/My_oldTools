@@ -874,4 +874,6 @@ const lastMatch = /Last:\s*([0-9.]+)/i.exec(stats);
   function inferBaseConfidence(){
     // try to read something like "Confidence: 78%" from your existing summary/meta
     const meta = (document.getElementById("techMeta")?.textContent || "") + " " + (document.getElementById("techSummary")?.textContent || "");
-const m = meta.match(/Confidence[:\s]+(\d{1,3})/i);
+    const m = meta.match(/Confidence[:\s]+(\d{1,3})/i);
+    return m ? parseInt(m[1]) : null;
+} }
