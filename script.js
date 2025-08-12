@@ -823,7 +823,7 @@ function scrapeAndUpdateTDP(){
 
   // last price from header "Last: X · 24h High: ..."
   const stats = document.getElementById("techStats")?.textContent || "";
-  const lastMatch = stats.match(/Last:\s*([\d.]+)/i);
+const lastMatch = /Last:\s*([0-9.]+)/i.exec(stats);
   const price = lastMatch ? Number(lastMatch[1]) : null;
 
   // parse tech table
@@ -832,8 +832,8 @@ function scrapeAndUpdateTDP(){
   const pick = (metric) => {
     const row = rows.find(r => (r.children?.[1]?.textContent || "").toLowerCase().includes(metric.toLowerCase()));
     return row ? {
-      value: parseFloat((row.children?.[2]?.textContent || "").replace(/[^\d.-]/g,"")),
-      note: (row.children?.[3]?.textContent || "").trim()
+      value: parseFloat((row.children?.[2]?.textContent || "").replace(/[^0-9.\-]/g,"")),
+      value: parseFloat((row.children?.[2]?.textContent || "").replace(/[^0-9.\-]/g, "")),
     } : null;
   };
 
