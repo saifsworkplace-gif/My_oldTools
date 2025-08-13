@@ -970,6 +970,25 @@ function logTradeSummaryFromPanel() {
   const line = `[TDP] ${title} → ${badge} | RSI: ${rsiTxt} | MACD: ${macdTxt} | EMA: ${emaTxt} | ADX/DI: ${adxTxt} | Map: P=${mapPrice}, Entry=${mapEntry}, T1=${mapT1}, Stop=${mapStop}`;
   console.log(line);
 }
+// --- TDP loader helpers (simple skeleton) ---
+window.startTDPLoaders = function () {
+  const ids = [
+    'tdp-title','tdp-updated','tdp-verdict',
+    'tdp-score','tdp-mtf','tdp-rsi-text','tdp-macd-text',
+    'tdp-ema-text','tdp-adx-text','tdp-map-price','tdp-map-entry',
+    'tdp-map-t1','tdp-map-stop','tdp-risks','tdp-context',
+    'tvChartContainer' // the TradingView chart box
+  ];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('tdp-loading');
+  });
+};
+
+window.stopTDPLoaders = function () {
+  document.querySelectorAll('.tdp-loading')
+    .forEach(el => el.classList.remove('tdp-loading'));
+};
 
 // Safe wrapper: run the scraper if present, then log
 function runTDPNow() {
@@ -988,6 +1007,7 @@ function runTDPNow() {
 document.getElementById('runTech')?.addEventListener('click', () => {
   // run after UI finishes
   startTDPLoaders();
+  initOrUpdateTVChart();
   setTimeout(runTDPNow, 50);
   setTimeout(loadTechChart, 60);
 });
@@ -996,6 +1016,8 @@ document.getElementById('runTech')?.addEventListener('click', () => {
 document.getElementById('techTf')?.addEventListener('change', () => {
   // if your code re-renders on change, wait a moment then scrape
   startTDPLoaders();
+  initOrUpdateTVChart();
+  initOrUpdateTVChart();
   setTimeout(runTDPNow, 150);
   setTimeout(loadTechChart, 120);
 });
@@ -1193,5 +1215,56 @@ function loadTechChart() {
     hide_legend: true,
     allow_symbol_change: false,
     save_image: false,
+  });
+}
+// ===== TradingView chart helpers =====
+window.tvState = { widget: null };
+
+function tvSymbolFromInputs() {
+  // read your UI inputs
+  const raw = (document.getElementById('techTicker')?.value || 'BTC').trim().toUpperCase();
+  // turn "INJ" -> "BINANCE:INJUSDT"
+  return `BINANCE:${raw}USDT`;
+}
+
+function tvResolutionFromTf() {
+  const tf = document.getElementById('techTf')?.value || '1d';
+  // TV wants: "60", "240", "D"
+  return tf === '1h' ? '60' : tf === '4h' ? '240' : 'D';
+}
+
+function updateChartPairLabel(sym) {
+  const el = document.getElementById('chartPairLabel');
+  if (el) el.textContent = sym.replace('BINANCE:', '');
+}
+
+function initOrUpdateTVChart() {
+  const containerId = 'tv_chart_container';
+  const sym = tvSymbolFromInputs();
+  const res = tvResolutionFromTf();
+
+  // If library is not ready yet, just bail quietly
+  if (typeof TradingView === 'undefined' || !document.getElementById(containerId)) return;
+
+  updateChartPairLabel(sym);
+
+  // Recreate widget each time (simplest & reliable)
+  try { window.tvState.widget = null; } catch (_) {}
+  // Clear container (in case previous canvas remains)
+  const c = document.getElementById(containerId);
+  if (c) c.innerHTML = '';
+
+  /* eslint-disable no-new */
+  new TradingView.widget({
+    container_id: containerId,
+    symbol: sym,
+    interval: res,
+    autosize: true,
+    theme: 'dark',
+    hide_legend: true,
+    allow_symbol_change: false,
+    studies: [],              // keep it simple
+    locale: 'en',
+    timezone: 'Etc/UTC'
   });
 }
