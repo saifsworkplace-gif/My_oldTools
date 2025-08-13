@@ -1014,3 +1014,95 @@ document.getElementById('techTicker')?.addEventListener('keydown', (ev) => {
   });
   obs.observe(tbody, { childList: true, subtree: true, characterData: true });
 })();
+/* ================================
+   TDP quick fix: retry + fallbacks
+   ================================ */
+
+// 1) tiny helpers (global-ish via window so we don’t collide)
+(function () {
+  if (!('MutationObserver' in window)) return; // old browsers: skip (safe)
+  window.__tdpRetries = 0;
+  window.__tdpMaxRetries = 5;
+  window.__tdpBackoffMs = 250;
+
+  window.__tdpFirstNum = function __tdpFirstNum(s) {
+    const m = String(s ?? '').match(/-?\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : undefined;
+  };
+
+  window.__tdpSchedule = function __tdpSchedule() {
+    const n = Math.min(window.__tdpMaxRetries, Math.max(1, window.__tdpRetries));
+    const delay = window.__tdpBackoffMs * n; // 250ms, 500ms, 750ms…
+    setTimeout(() => {
+      if (typeof window.scrapeAndUpdateTDP === 'function') {
+        window.scrapeAndUpdateTDP(true); // “retry” flag
+      }
+    }, delay);
+  };
+})();
+
+// 2) wrap the existing scraper with a “ready” check.
+//    add this guard at the TOP of your scrapeAndUpdateTDP() body if you can.
+//    if you’re not comfortable editing inside, this outer monkey-patch works.
+(function () {
+  if (typeof window.scrapeAndUpdateTDP !== 'function') return;
+
+  const __orig = window.scrapeAndUpdateTDP;
+  window.scrapeAndUpdateTDP = function (fromRetry = false) {
+    // run original once to ensure it builds the table if that’s what it does
+    // (no-op if your original already expects DOM to be ready)
+    try { /* don’t block on errors */ } catch {}
+
+    // check the 5 key rows; if missing, retry quietly
+    const tbody = document.getElementById('techTable');
+    const rows = Array.from(tbody ? tbody.querySelectorAll('tr') : []);
+    const get = (needle) => rows.find(r =>
+      (r.children?.[1]?.textContent || '').toLowerCase().replace(/[^a-z0-9+\-\/()]/g,'')
+        .includes(needle)
+    );
+
+    const rsiRow = get('rsi');
+    const macdRow = get('macd');
+    const emaRow  = get('ema20/ema50/ema200');
+    const diRow   = get('+di/-di');
+    const adxRow  = get('adx(14)');
+
+    const ready = !!(rsiRow && macdRow && emaRow && diRow && adxRow);
+
+    if (!ready) {
+      if (window.__tdpRetries < window.__tdpMaxRetries) {
+        window.__tdpRetries++;
+        // light debug only (won’t spam red)
+        console.debug(`[TDP] waiting for indicators… retry ${window.__tdpRetries}/${window.__tdpMaxRetries}`);
+        window.__tdpSchedule();
+        return;
+      } else {
+        console.debug('[TDP] rendering with partial data (indicators incomplete after retries)');
+      }
+    } else {
+      if (window.__tdpRetries) window.__tdpRetries = 0;
+    }
+
+    // run your original scraper (it will parse whatever exists; use safe defaults inside)
+    try {
+      __orig.apply(this, arguments);
+    } catch (e) {
+      console.warn('[TDP] scrape failed but continuing:', e?.message || e);
+    }
+  };
+})();
+
+// 3) auto-trigger after Analyze (you already added this; keeping as guard)
+document.getElementById('runTech')?.addEventListener('click', () => {
+  setTimeout(() => {
+    if (typeof window.scrapeAndUpdateTDP === 'function') window.scrapeAndUpdateTDP();
+  }, 60);
+});
+
+// 4) also refresh TDP when timeframe changes or user hits Enter in ticker
+document.getElementById('techTf')?.addEventListener('change', () => {
+  setTimeout(() => window.scrapeAndUpdateTDP && window.scrapeAndUpdateTDP(), 150);
+});
+document.getElementById('techTicker')?.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') setTimeout(() => window.scrapeAndUpdateTDP && window.scrapeAndUpdateTDP(), 150);
+});
