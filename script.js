@@ -914,6 +914,7 @@ const adx14 = adxRow ? nums(cellText(adxRow, 2))[0] : undefined;
 
 
   window.updateTradeDecisionPanel(analysis);
+stopTDPLoaders(); // hide skeletons once content is filled
 
   function inferBaseConfidence() {
   // search specific spots first
@@ -986,12 +987,14 @@ function runTDPNow() {
 /* A) After Analyze — you already wired this, but keeping as guard */
 document.getElementById('runTech')?.addEventListener('click', () => {
   // run after UI finishes
+  startTDPLoaders();
   setTimeout(runTDPNow, 50);
 });
 
 /* B) Also run when timeframe changes */
 document.getElementById('techTf')?.addEventListener('change', () => {
   // if your code re-renders on change, wait a moment then scrape
+  startTDPLoaders();
   setTimeout(runTDPNow, 150);
 });
 
@@ -999,6 +1002,7 @@ document.getElementById('techTf')?.addEventListener('change', () => {
 document.getElementById('techTicker')?.addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter') {
     // allow your existing Analyze handler to do its work first
+    startTDPLoaders();
     setTimeout(runTDPNow, 150);
   }
 });
@@ -1010,6 +1014,7 @@ document.getElementById('techTicker')?.addEventListener('keydown', (ev) => {
   const obs = new MutationObserver((muts) => {
     // debounce a bit in case multiple rows update
     clearTimeout(tbody.__tdpDebounce);
+    startTDPLoaders();
     tbody.__tdpDebounce = setTimeout(runTDPNow, 120);
   });
   obs.observe(tbody, { childList: true, subtree: true, characterData: true });
@@ -1106,3 +1111,35 @@ document.getElementById('techTf')?.addEventListener('change', () => {
 document.getElementById('techTicker')?.addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter') setTimeout(() => window.scrapeAndUpdateTDP && window.scrapeAndUpdateTDP(), 150);
 });
+/* ========= Simple section loader for Technicals ========= */
+// Where we’ll show the loader (the new Trade Decision panel). If it’s missing,
+// we fall back to the big “verdictCard”.
+function getTechnicalsContainer() {
+  return document.getElementById('trade-decision') ||
+         document.getElementById('verdictCard');
+}
+
+function showTechnicalsLoader(on = true) {
+  const host = getTechnicalsContainer();
+  if (!host) return;
+
+  // mark busy for a11y
+  host.setAttribute('aria-busy', on ? 'true' : 'false');
+
+  // add/remove loader spinner
+  let spinner = host.querySelector('.tdp-loader');
+  if (on) {
+    if (!spinner) {
+      spinner = document.createElement('div');
+      spinner.className = 'tdp-loader';
+      host.appendChild(spinner);
+    }
+    // also visually dim immediate cards in the grid to signal “loading”
+    const cards = host.closest('.card')?.parentElement?.querySelectorAll('.card');
+    cards?.forEach(c => c.classList.add('is-loading'));
+  } else {
+    spinner?.remove();
+    const cards = host.closest('.card')?.parentElement?.querySelectorAll('.card');
+    cards?.forEach(c => c.classList.remove('is-loading'));
+  }
+}

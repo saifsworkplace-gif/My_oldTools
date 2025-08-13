@@ -123,3 +123,29 @@ tfoot tr{position:sticky;bottom:0;background:linear-gradient(180deg,var(--bg-sof
 .tdp--buy .tdp__badge{background:rgba(22,185,120,.15);color:#34d399;border-color:rgba(22,185,120,.35)}
 .tdp--wait .tdp__badge{background:rgba(246,199,79,.15);color:#facc15;border-color:rgba(246,199,79,.35)}
 .tdp--avoid .tdp__badge{background:rgba(255,110,110,.15);color:#fb7185;border-color:rgba(255,110,110,.35)}
+/* ===== Loaders & skeletons ===== */
+:root {
+  --load-accent: #6ae1ff; /* cyan */
+}
+
+.card.is-loading { position: relative; opacity: .75; }
+.tdp-loader {
+  position: absolute;
+  top: 10px; right: 12px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.15);
+  border-top-color: var(--load-accent);
+  animation: tdpSpin .8s linear infinite;
+  z-index: 3;
+}
+@keyframes tdpSpin { to { transform: rotate(360deg); } }
+
+/* “skeleton” shimmer line (optional, used later for tables) */
+.skel-line {
+  display:inline-block; height: 10px; width: 80px; border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.14), rgba(255,255,255,.06));
+  background-size: 200% 100%;
+  animation: skel 1.2s ease-in-out infinite;
+}
+@keyframes skel { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
