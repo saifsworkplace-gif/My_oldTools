@@ -931,3 +931,86 @@ const adx14 = adxRow ? nums(cellText(adxRow, 2))[0] : undefined;
 }
 
 }
+// --- trigger the Trade Decision Panel update whenever Analyze runs ---
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('runTech');
+  if (!btn) return;
+
+  btn.addEventListener('click', () => {
+    // wait for the table/ui to render, then scrape it
+    setTimeout(() => {
+      if (typeof window.scrapeAndUpdateTDP === 'function') {
+        window.scrapeAndUpdateTDP();
+      }
+    }, 50);
+  });
+});
+/* ------------------------------
+   Extra wiring + console summary
+   ------------------------------ */
+
+// Helper: pretty console line so we can verify quickly after deploy
+function logTradeSummaryFromPanel() {
+  const $ = (id) => document.getElementById(id);
+  const title = $('tdp-title')?.textContent?.trim() || '—';
+  const badge = $('tdp-verdict')?.textContent?.trim() || '—';
+
+  // Read cards (they all exist in the panel shell)
+  const rsiTxt   = $('tdp-rsi')?.textContent?.replace(/\s+/g,' ') || '—';
+  const macdTxt  = $('tdp-macd')?.textContent?.replace(/\s+/g,' ') || '—';
+  const emaTxt   = $('tdp-ema')?.textContent?.replace(/\s+/g,' ') || '—';
+  const adxTxt   = $('tdp-adxdi')?.textContent?.replace(/\s+/g,' ') || '—';
+  const mapPrice = $('tdp-price')?.textContent?.trim() || '—';
+  const mapEntry = $('tdp-entry')?.textContent?.trim() || '—';
+  const mapT1    = $('tdp-t1')?.textContent?.trim() || '—';
+  const mapStop  = $('tdp-stop')?.textContent?.trim() || '—';
+
+  // Short, human line
+  const line = `[TDP] ${title} → ${badge} | RSI: ${rsiTxt} | MACD: ${macdTxt} | EMA: ${emaTxt} | ADX/DI: ${adxTxt} | Map: P=${mapPrice}, Entry=${mapEntry}, T1=${mapT1}, Stop=${mapStop}`;
+  console.log(line);
+}
+
+// Safe wrapper: run the scraper if present, then log
+function runTDPNow() {
+  if (typeof window.scrapeAndUpdateTDP === 'function') {
+    try {
+      window.scrapeAndUpdateTDP();
+      // give the panel a tick to render
+      setTimeout(logTradeSummaryFromPanel, 30);
+    } catch (e) {
+      console.warn('scrapeAndUpdateTDP() failed:', e);
+    }
+  }
+}
+
+/* A) After Analyze — you already wired this, but keeping as guard */
+document.getElementById('runTech')?.addEventListener('click', () => {
+  // run after UI finishes
+  setTimeout(runTDPNow, 50);
+});
+
+/* B) Also run when timeframe changes */
+document.getElementById('techTf')?.addEventListener('change', () => {
+  // if your code re-renders on change, wait a moment then scrape
+  setTimeout(runTDPNow, 150);
+});
+
+/* C) Run when user hits Enter in ticker box */
+document.getElementById('techTicker')?.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') {
+    // allow your existing Analyze handler to do its work first
+    setTimeout(runTDPNow, 150);
+  }
+});
+
+/* D) Failsafe: if the tech table body changes, scrape once */
+(() => {
+  const tbody = document.getElementById('techTable');
+  if (!tbody || !('MutationObserver' in window)) return;
+  const obs = new MutationObserver((muts) => {
+    // debounce a bit in case multiple rows update
+    clearTimeout(tbody.__tdpDebounce);
+    tbody.__tdpDebounce = setTimeout(runTDPNow, 120);
+  });
+  obs.observe(tbody, { childList: true, subtree: true, characterData: true });
+})();
