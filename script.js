@@ -989,6 +989,7 @@ document.getElementById('runTech')?.addEventListener('click', () => {
   // run after UI finishes
   startTDPLoaders();
   setTimeout(runTDPNow, 50);
+  setTimeout(loadTechChart, 60);
 });
 
 /* B) Also run when timeframe changes */
@@ -996,6 +997,7 @@ document.getElementById('techTf')?.addEventListener('change', () => {
   // if your code re-renders on change, wait a moment then scrape
   startTDPLoaders();
   setTimeout(runTDPNow, 150);
+  setTimeout(loadTechChart, 120);
 });
 
 /* C) Run when user hits Enter in ticker box */
@@ -1004,6 +1006,7 @@ document.getElementById('techTicker')?.addEventListener('keydown', (ev) => {
     // allow your existing Analyze handler to do its work first
     startTDPLoaders();
     setTimeout(runTDPNow, 150);
+    if (ev.key === 'Enter') setTimeout(loadTechChart, 120);
   }
 });
 
@@ -1142,4 +1145,53 @@ function showTechnicalsLoader(on = true) {
     const cards = host.closest('.card')?.parentElement?.querySelectorAll('.card');
     cards?.forEach(c => c.classList.remove('is-loading'));
   }
+}
+// ===== TradingView chart helpers =====
+function tvInterval(tf) {
+  // map your TF selector to TV intervals
+  switch ((tf || '1d')) {
+    case '1h': return '60';
+    case '4h': return '240';
+    case '1d': default: return 'D';
+  }
+}
+function tvSymbolFromTicker(t) {
+  if (!t) return null;
+  const sym = t.trim().toUpperCase();
+  // default to Binance USDT pair: INJ -> BINANCE:INJUSDT
+  if (sym.includes(':')) return sym;              // already a TV symbol
+  return `BINANCE:${sym}USDT`;
+}
+
+function loadTechChart() {
+  const container = document.getElementById('tv_chart_container');
+  if (!container || typeof TradingView === 'undefined') return;
+
+  const t  = document.getElementById('techTicker')?.value?.trim().toUpperCase() || '';
+  const tf = document.getElementById('techTf')?.value || '1d';
+  const symbol = tvSymbolFromTicker(t);
+  if (!symbol) return;
+
+  // tiny label like “INJUSDT · 1d”
+  const pair = symbol.replace('BINANCE:','');
+  const lbl = document.getElementById('chartPairLabel');
+  if (lbl) lbl.textContent = `${pair} · ${tf}`;
+
+  // rebuild widget each time (simple + robust)
+  container.innerHTML = '';
+  new TradingView.widget({
+    container_id: "tv_chart_container",
+    symbol: symbol,
+    interval: tvInterval(tf),
+    width: "100%",
+    height: 320,
+    theme: "dark",
+    style: "1",
+    timezone: "Etc/UTC",
+    locale: "en",
+    hide_top_toolbar: true,
+    hide_legend: true,
+    allow_symbol_change: false,
+    save_image: false,
+  });
 }
